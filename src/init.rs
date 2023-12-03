@@ -19,12 +19,12 @@ impl Plugin for InitPlugin {
                 WindowPlugin {
                     primary_window: Some(Window {
                         title: win_title.into(),
-                        resolution: (640., 360.).into(),
+                        resolution: (640., 480.).into(),
                         present_mode: PresentMode::AutoNoVsync,
                         window_theme: Some(WindowTheme::Dark),
                         ..default()
                     }),
                     ..default()
-                }));
+                }).set(ImagePlugin::default_nearest()));
     }
 }

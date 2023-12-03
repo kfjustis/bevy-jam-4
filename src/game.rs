@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy::render::camera::ScalingMode;
-use bevy_xpbd_2d::{math::*, prelude::*, parry::query::DefaultQueryDispatcher};
+use bevy_xpbd_2d::{math::*, prelude::*};
 
 pub struct GamePlugin;
 
@@ -12,6 +12,7 @@ impl Plugin for GamePlugin {
         ));
         app.add_systems(Startup, setup_game);
         app.add_systems(Update, move_player);
+        app.insert_resource(Gravity(Vector::NEG_Y * 100.0 * 10.0));
     }
 }
 
@@ -23,10 +24,15 @@ fn setup_game(
     asset_server: Res<AssetServer>
 ) {
     commands.spawn(Camera2dBundle {
-        //projection: OrthographicProjection {
-        //    //scaling_mode: ScalingMode::Fixed { width: 320.0, height: 240.0 },
-        //    ..default()
-        //},
+        projection: OrthographicProjection {
+            scale: 1.0,
+            //scaling_mode: ScalingMode::Fixed { width: 320.0, height: 240.0 },
+            //scaling_mode: ScalingMode::AutoMin { min_width: 320.0, min_height: 240.0 },
+            scaling_mode: ScalingMode::FixedVertical(240.0),
+            near: -1000.0,
+            far: 1000.0,
+            ..default()
+        },
         ..default()
     });
 
@@ -46,14 +52,18 @@ fn setup_game(
         SpriteBundle {
             sprite: Sprite {
                 color: Color::rgb(0.63,0.46,0.06),
-                custom_size: Some(Vec2::new(640.0, 32.0)),
+                custom_size: Some(Vec2::new(320.0, 32.0)),
                 ..default()
             },
-            transform: Transform::from_xyz(0.0, -160.0, 0.0),
+            transform: Transform::from_xyz(0.0, -104.0, 0.0),
             ..default()
         },
         RigidBody::Static,
-        Collider::cuboid(640.0, 32.0)
+        Collider::cuboid(320.0, 32.0),
+        Friction::ZERO.with_combine_rule(CoefficientCombine::Min),
+        Restitution::ZERO.with_combine_rule(CoefficientCombine::Min),
+        GravityScale(1.0),
+        Mass(1.0)
     ));
 }
 
