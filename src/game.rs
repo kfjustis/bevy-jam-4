@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use bevy_inspector_egui::prelude::*;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy::render::camera::ScalingMode;
+use bevy_tweening::{lens::*, *};
 use bevy_xpbd_2d::{math::*, prelude::*};
 
 pub struct GamePlugin;
@@ -11,11 +12,12 @@ impl Plugin for GamePlugin {
         app.add_plugins((
             PhysicsPlugins::default(),
             PhysicsDebugPlugin::default(),
+            TweeningPlugin,
             WorldInspectorPlugin::new()
         ));
         app.register_type::<Speed>();
         app.add_systems(Startup, (setup_game).chain());
-        app.add_systems(Update, move_player);
+        app.add_systems(Update, (move_player).chain());
         app.insert_resource(Gravity(Vector::NEG_Y * 100.0 * 10.0));
     }
 }
@@ -44,7 +46,21 @@ fn setup_game(
         ..default()
     });
 
-    // Spawn the player.
+    // Spawn the player with its tween animation.
+    //let fast_shovel: u64 = 350; Speed mode!
+    let norm_shovel: u64 = 500;
+    let tween = Tween::new(
+        EaseFunction::ElasticInOut,
+        std::time::Duration::from_millis(norm_shovel),
+        TransformRotationLens {
+            start: Quat::from_axis_angle(Vec3::Z, -std::f32::consts::PI / 9.),
+            end: Quat::from_axis_angle(Vec3::Z, std::f32::consts::PI / 9.),
+        }
+    )
+    .with_repeat_count(RepeatCount::Infinite)
+    .with_repeat_strategy(RepeatStrategy::Repeat);
+
+
     commands.spawn((
         Name::new("PlayerEntity"),
         Player,
@@ -52,6 +68,7 @@ fn setup_game(
             texture: asset_server.load("player_pixel_1.png"),
             ..default()
         },
+        Animator::new(tween),
         RigidBody::Dynamic,
         Collider::capsule(32.0, 16.0),
         LockedAxes::new()
@@ -80,7 +97,7 @@ fn setup_game(
 
 fn move_player(
     keys: Res<Input<KeyCode>>,
-    mut players: Query<(&mut LinearVelocity, &Speed), With<Player>>,
+    mut players: Query<(&mut LinearVelocity, &Speed), With<Player>>
 ) {
     for (mut linear_vel, player_speed) in &mut players {
         // Only move left and right.

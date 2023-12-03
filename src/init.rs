@@ -20,7 +20,7 @@ impl Plugin for InitPlugin {
                     primary_window: Some(Window {
                         title: win_title.into(),
                         resolution: (640., 480.).into(),
-                        present_mode: PresentMode::AutoNoVsync,
+                        present_mode: PresentMode::AutoVsync,
                         window_theme: Some(WindowTheme::Dark),
                         ..default()
                     }),
