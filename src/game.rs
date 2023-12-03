@@ -1,4 +1,6 @@
 use bevy::prelude::*;
+use bevy_inspector_egui::prelude::*;
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy::render::camera::ScalingMode;
 use bevy_xpbd_2d::{math::*, prelude::*};
 
@@ -9,8 +11,10 @@ impl Plugin for GamePlugin {
         app.add_plugins((
             PhysicsPlugins::default(),
             PhysicsDebugPlugin::default(),
+            WorldInspectorPlugin::new()
         ));
-        app.add_systems(Startup, setup_game);
+        app.register_type::<Speed>();
+        app.add_systems(Startup, (setup_game).chain());
         app.add_systems(Update, move_player);
         app.insert_resource(Gravity(Vector::NEG_Y * 100.0 * 10.0));
     }
@@ -18,6 +22,10 @@ impl Plugin for GamePlugin {
 
 #[derive(Component)]
 struct Player;
+
+#[derive(Component, Reflect, InspectorOptions)]
+#[reflect(InspectorOptions)]
+struct Speed(f32);
 
 fn setup_game(
     mut commands: Commands,
@@ -38,13 +46,20 @@ fn setup_game(
 
     // Spawn the player.
     commands.spawn((
+        Name::new("PlayerEntity"),
         Player,
         SpriteBundle {
             texture: asset_server.load("player_pixel_1.png"),
             ..default()
         },
         RigidBody::Dynamic,
-        Collider::capsule(32.0, 16.0)
+        Collider::capsule(32.0, 16.0),
+        LockedAxes::new()
+            .lock_rotation(),
+        Friction::ZERO.with_combine_rule(CoefficientCombine::Min),
+        Restitution::ZERO.with_combine_rule(CoefficientCombine::Min),
+        Mass(1.0),
+        Speed(32.0)
     ));
 
     // Spawn the ground.
@@ -59,16 +74,31 @@ fn setup_game(
             ..default()
         },
         RigidBody::Static,
-        Collider::cuboid(320.0, 32.0),
-        Friction::ZERO.with_combine_rule(CoefficientCombine::Min),
-        Restitution::ZERO.with_combine_rule(CoefficientCombine::Min),
-        GravityScale(1.0),
-        Mass(1.0)
+        Collider::cuboid(320.0, 32.0)
     ));
 }
 
 fn move_player(
-    _keys: Res<Input<KeyCode>>
+    keys: Res<Input<KeyCode>>,
+    mut players: Query<(&mut LinearVelocity, &Speed), With<Player>>,
 ) {
-    return;
+    for (mut linear_vel, player_speed) in &mut players {
+        // Only move left and right.
+        let mut direction = Vec2::ZERO;
+        let left = keys.any_pressed([KeyCode::A, KeyCode::Left]);
+        let right = keys.any_pressed([KeyCode::D, KeyCode::Right]);
+        if left {
+            direction += Vec2::new(-1.0, 0.0);
+        }
+        if right {
+            direction += Vec2::new(1.0, 0.0);
+        }
+        direction.y = 0.0;
+
+        // Set the velocity.
+        linear_vel.x += direction.normalize_or_zero().x * player_speed.0;
+
+        // Apply friction.
+        linear_vel.x *= 0.8;
+    }
 }
