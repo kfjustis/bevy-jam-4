@@ -47,11 +47,11 @@ fn setup_game(
     });
 
     // Spawn the player with its tween animation.
-    //let fast_shovel: u64 = 350; Speed mode!
-    let norm_shovel: u64 = 500;
+    let norm_shovel_ms: u64 = 500;
+    //let fast_shovel_ms: u64 = 350; Speed mode!
     let tween = Tween::new(
         EaseFunction::ElasticInOut,
-        std::time::Duration::from_millis(norm_shovel),
+        std::time::Duration::from_millis(norm_shovel_ms),
         TransformRotationLens {
             start: Quat::from_axis_angle(Vec3::Z, -std::f32::consts::PI / 9.),
             end: Quat::from_axis_angle(Vec3::Z, std::f32::consts::PI / 9.),
@@ -60,15 +60,10 @@ fn setup_game(
     .with_repeat_count(RepeatCount::Infinite)
     .with_repeat_strategy(RepeatStrategy::Repeat);
 
-
     commands.spawn((
         Name::new("PlayerEntity"),
         Player,
-        SpriteBundle {
-            texture: asset_server.load("player_pixel_1.png"),
-            ..default()
-        },
-        Animator::new(tween),
+        SpatialBundle::INHERITED_IDENTITY,
         RigidBody::Dynamic,
         Collider::capsule(32.0, 16.0),
         LockedAxes::new()
@@ -77,7 +72,15 @@ fn setup_game(
         Restitution::ZERO.with_combine_rule(CoefficientCombine::Min),
         Mass(1.0),
         Speed(32.0)
-    ));
+    ))
+    .with_children(|parent| {
+        parent.spawn((
+            SpriteBundle {
+                texture: asset_server.load("player_pixel_1.png"),
+                ..default()
+            },
+            Animator::new(tween)));
+    });
 
     // Spawn the ground.
     commands.spawn((
