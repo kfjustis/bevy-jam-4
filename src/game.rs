@@ -17,13 +17,16 @@ impl Plugin for GamePlugin {
         ));
         app.register_type::<Speed>();
         app.add_systems(Startup, (setup_game).chain());
-        app.add_systems(Update, (move_player).chain());
+        app.add_systems(Update, (anim_player, move_player).chain());
         app.insert_resource(Gravity(Vector::NEG_Y * 100.0 * 10.0));
     }
 }
 
 #[derive(Component)]
-struct Player;
+struct PlayerCapsule;
+
+#[derive(Component)]
+struct PlayerSprite;
 
 #[derive(Component, Reflect, InspectorOptions)]
 #[reflect(InspectorOptions)]
@@ -46,23 +49,12 @@ fn setup_game(
         ..default()
     });
 
-    // Spawn the player with its tween animation.
-    let norm_shovel_ms: u64 = 500;
-    //let fast_shovel_ms: u64 = 350; Speed mode!
-    let tween = Tween::new(
-        EaseFunction::ElasticInOut,
-        std::time::Duration::from_millis(norm_shovel_ms),
-        TransformRotationLens {
-            start: Quat::from_axis_angle(Vec3::Z, -std::f32::consts::PI / 9.),
-            end: Quat::from_axis_angle(Vec3::Z, std::f32::consts::PI / 9.),
-        }
-    )
-    .with_repeat_count(RepeatCount::Infinite)
-    .with_repeat_strategy(RepeatStrategy::Repeat);
-
+    // Spawn the player with its physics, sprite, and tween animations.
+    // The sprite is a child of the capsule/SpatialBundle so it can
+    // rotate independently.
     commands.spawn((
         Name::new("PlayerEntity"),
-        Player,
+        PlayerCapsule,
         SpatialBundle::INHERITED_IDENTITY,
         RigidBody::Dynamic,
         Collider::capsule(32.0, 16.0),
@@ -74,7 +66,20 @@ fn setup_game(
         Speed(32.0)
     ))
     .with_children(|parent| {
+        let base_duration_ms: u64 = 500;
+        let tween = Tween::new(
+            EaseFunction::ElasticInOut,
+            std::time::Duration::from_millis(base_duration_ms),
+            TransformRotationLens {
+                start: Quat::from_axis_angle(Vec3::Z, -std::f32::consts::PI / 9.),
+                end: Quat::from_axis_angle(Vec3::Z, std::f32::consts::PI / 9.),
+            }
+        )
+        .with_repeat_count(RepeatCount::Infinite)
+        .with_repeat_strategy(RepeatStrategy::Repeat);
+
         parent.spawn((
+            PlayerSprite,
             SpriteBundle {
                 texture: asset_server.load("player_pixel_1.png"),
                 ..default()
@@ -98,9 +103,51 @@ fn setup_game(
     ));
 }
 
+fn anim_player(
+    keys: Res<Input<KeyCode>>,
+    mut animators: Query<&mut Animator<Transform>, With<PlayerSprite>>
+) {
+    let hold_action = keys.any_pressed([KeyCode::Space]);
+
+    for mut animator in animators.iter_mut() {
+        let base_duration_ms: u64 = 500;
+        let norm_speed = animator.speed() < 1.5f32;
+        let fast_speed = animator.speed() > 1.5f32;
+
+        if norm_speed && hold_action {
+            let tween = Tween::new(
+                EaseFunction::ElasticInOut,
+                std::time::Duration::from_millis(base_duration_ms),
+                TransformRotationLens {
+                    // These angles lean the sprite forward. (Towards screen right.)
+                    start: Quat::from_axis_angle(Vec3::Z, -std::f32::consts::PI / 4.),
+                    end: Quat::from_axis_angle(Vec3::Z, std::f32::consts::PI / 12.),
+                }
+            )
+            .with_repeat_count(RepeatCount::Infinite)
+            .with_repeat_strategy(RepeatStrategy::Repeat);
+            animator.set_tweenable(tween);
+            animator.set_speed(2.0);
+        } else if fast_speed && !hold_action{
+            let tween = Tween::new(
+                EaseFunction::ElasticInOut,
+                std::time::Duration::from_millis(base_duration_ms),
+                TransformRotationLens {
+                    start: Quat::from_axis_angle(Vec3::Z, -std::f32::consts::PI / 9.),
+                    end: Quat::from_axis_angle(Vec3::Z, std::f32::consts::PI / 9.),
+                }
+            )
+            .with_repeat_count(RepeatCount::Infinite)
+            .with_repeat_strategy(RepeatStrategy::Repeat);
+            animator.set_tweenable(tween);
+            animator.set_speed(1.0);
+        }
+    }
+}
+
 fn move_player(
     keys: Res<Input<KeyCode>>,
-    mut players: Query<(&mut LinearVelocity, &Speed), With<Player>>
+    mut players: Query<(&mut LinearVelocity, &Speed), With<PlayerCapsule>>
 ) {
     for (mut linear_vel, player_speed) in &mut players {
         // Only move left and right.

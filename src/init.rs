@@ -11,10 +11,13 @@ impl Plugin for InitPlugin {
         let win_title = "Bevy Jam 4 | kftoons";
         app.add_plugins(DefaultPlugins.set(
             RenderPlugin {
-                //render_creation: RenderCreation::Automatic(WgpuSettings {
-                //    backends: Some(Backends::VULKAN),
-                //    ..default()
-                //}),
+                render_creation: RenderCreation::Automatic(WgpuSettings {
+                    #[cfg(target_os = "windows")]
+                    backends: Some(Backends::VULKAN),
+                    #[cfg(target_os = "linux")]
+                    backends: Some(Backends::GL),
+                    ..default()
+                }),
                 ..default()
             }).set(
                 WindowPlugin {

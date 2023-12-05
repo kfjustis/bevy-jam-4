@@ -11,12 +11,6 @@ opt-level = 3
 [profile.release]
 codegen-units = 1
 
-[profile.wasm-release]
-inherits = "release"
-opt-level = "z"
-lto = "fat"
-codegen-units = 1
-
 [dependencies]
 #bevy = { version = "0.12.1", features = ["dynamic_linking"] }
 bevy = { version = "0.12.1" }
