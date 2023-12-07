@@ -1,2 +1,4 @@
 /target
 /wasm-out
+/out
+out.zip
