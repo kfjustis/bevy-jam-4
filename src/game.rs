@@ -53,8 +53,6 @@ fn setup_game(
         projection: OrthographicProjection {
             scale: 1.0,
             scaling_mode: ScalingMode::Fixed { width: 320.0, height: 240.0 },
-            //scaling_mode: ScalingMode::AutoMin { min_width: 320.0, min_height: 240.0 },
-            //scaling_mode: ScalingMode::FixedVertical(240.0),
             near: -1000.0,
             far: 1000.0,
             ..default()
@@ -63,7 +61,6 @@ fn setup_game(
     });
 
     // Spawn the bg layers.
-        // Load the bg images.
     let bg_layers = (0..=4)
         .map(|i| format!("parallax/{i}.png"))
         .collect::<VecDeque<String>>();
@@ -72,14 +69,6 @@ fn setup_game(
         .map(|image_path| asset_server.load(image_path))
         .collect::<Vec<Handle<Image>>>();
     commands.insert_resource(ScrollerImages(bg_layer_handles));
-
-    commands.spawn(
-        SpriteBundle {
-            texture: asset_server.load(bg_layers.get(0).unwrap()),
-            ..default()
-        }
-    );
-
     let bg_sizes = [
         Vec2::new(320.0, 240.0),
         Vec2::new(320.0, 240.0),
@@ -87,7 +76,6 @@ fn setup_game(
         Vec2::new(320.0, 240.0),
         Vec2::new(320.0, 240.0),
     ];
-
     let scroller_speed_min = 0.2;
     let scroller_speed_step = 0.2;
     bg_sizes.into_iter().enumerate().for_each(|(i, size)| {
@@ -120,7 +108,6 @@ fn setup_game(
     commands.spawn((
         Name::new("PlayerEntity"),
         PlayerCapsule,
-        //SpatialBundle::INHERITED_IDENTITY,
         SpatialBundle {
             visibility: Visibility::Inherited,
             transform: Transform::from_xyz(0.0, 0.0, 100.0),
