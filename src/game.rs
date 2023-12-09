@@ -18,6 +18,7 @@ impl Plugin for GamePlugin {
         app.register_type::<Speed>();
         app.add_systems(Startup, (setup_game).chain());
         app.add_systems(Update, (anim_player, move_player).chain());
+        app.insert_resource(ClearColor(Color::rgb(0.0, 0.0, 0.0)));
         app.insert_resource(Gravity(Vector::NEG_Y * 100.0 * 10.0));
     }
 }
@@ -31,6 +32,9 @@ struct PlayerSprite;
 #[derive(Component, Reflect, InspectorOptions)]
 #[reflect(InspectorOptions)]
 struct Speed(f32);
+
+#[derive(Component)]
+struct Wall;
 
 fn setup_game(
     mut commands: Commands,
@@ -91,7 +95,7 @@ fn setup_game(
     commands.spawn((
         SpriteBundle {
             sprite: Sprite {
-                color: Color::rgb(0.63,0.46,0.06),
+                color: Color::rgb(0.63, 0.46, 0.06),
                 custom_size: Some(Vec2::new(320.0, 32.0)),
                 ..default()
             },
@@ -100,6 +104,30 @@ fn setup_game(
         },
         RigidBody::Static,
         Collider::cuboid(320.0, 32.0)
+    ));
+
+    // Spawn the walls.
+    commands.spawn((
+        Name::new("WallEntityL"),
+        Wall,
+        SpatialBundle {
+            visibility: Visibility::Hidden,
+            transform: Transform::from_xyz(-192.0, -56.0, 0.0),
+            ..default()
+        },
+        RigidBody::Static,
+        Collider::cuboid(64.0, 64.0),
+    ));
+    commands.spawn((
+        Name::new("WallEntityR"),
+        Wall,
+        SpatialBundle {
+            visibility: Visibility::Hidden,
+            transform: Transform::from_xyz(192.0, -56.0, 0.0),
+            ..default()
+        },
+        RigidBody::Static,
+        Collider::cuboid(64.0, 64.0),
     ));
 }
 
