@@ -2,8 +2,13 @@ use bevy::prelude::*;
 use bevy_inspector_egui::prelude::*;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy::render::camera::ScalingMode;
+use bevy_scroller::{
+    Scroller, ScrollerBundle, ScrollerDirection, ScrollerPlugin, ScrollerSize, SingleSpriteGenerator
+};
 use bevy_tweening::{lens::*, *};
 use bevy_xpbd_2d::{math::*, prelude::*};
+
+use std::collections::VecDeque;
 
 pub struct GamePlugin;
 
@@ -12,6 +17,7 @@ impl Plugin for GamePlugin {
         app.add_plugins((
             PhysicsPlugins::default(),
             PhysicsDebugPlugin::default(),
+            ScrollerPlugin,
             TweeningPlugin,
             WorldInspectorPlugin::new()
         ));
@@ -36,6 +42,9 @@ struct Speed(f32);
 #[derive(Component)]
 struct Wall;
 
+#[derive(Resource)]
+pub struct ScrollerImages(Vec<Handle<Image>>);
+
 fn setup_game(
     mut commands: Commands,
     asset_server: Res<AssetServer>
@@ -43,14 +52,66 @@ fn setup_game(
     commands.spawn(Camera2dBundle {
         projection: OrthographicProjection {
             scale: 1.0,
-            //scaling_mode: ScalingMode::Fixed { width: 320.0, height: 240.0 },
+            scaling_mode: ScalingMode::Fixed { width: 320.0, height: 240.0 },
             //scaling_mode: ScalingMode::AutoMin { min_width: 320.0, min_height: 240.0 },
-            scaling_mode: ScalingMode::FixedVertical(240.0),
+            //scaling_mode: ScalingMode::FixedVertical(240.0),
             near: -1000.0,
             far: 1000.0,
             ..default()
         },
         ..default()
+    });
+
+    // Spawn the bg layers.
+        // Load the bg images.
+    let bg_layers = (0..=4)
+        .map(|i| format!("parallax/{i}.png"))
+        .collect::<VecDeque<String>>();
+    let bg_layer_handles = bg_layers
+        .iter()
+        .map(|image_path| asset_server.load(image_path))
+        .collect::<Vec<Handle<Image>>>();
+    commands.insert_resource(ScrollerImages(bg_layer_handles));
+
+    commands.spawn(
+        SpriteBundle {
+            texture: asset_server.load(bg_layers.get(0).unwrap()),
+            ..default()
+        }
+    );
+
+    let bg_sizes = [
+        Vec2::new(320.0, 240.0),
+        Vec2::new(320.0, 240.0),
+        Vec2::new(320.0, 240.0),
+        Vec2::new(320.0, 240.0),
+        Vec2::new(320.0, 240.0),
+    ];
+
+    let scroller_speed_min = 0.2;
+    let scroller_speed_step = 0.2;
+    bg_sizes.into_iter().enumerate().for_each(|(i, size)| {
+        commands.spawn((
+            ScrollerSize {
+                size: Vec2::new(320.0, 240.0)
+            },
+            ScrollerBundle {
+                scroller: Scroller {
+                    speed: scroller_speed_min + i as f32 * scroller_speed_step,
+                    direction: ScrollerDirection::Backward,
+                    render_layer: Some(1),
+                    ..default()
+                },
+                generator: SingleSpriteGenerator {
+                    path: format!("parallax/{i}.png"),
+                    size,
+                },
+                spatial: SpatialBundle::from_transform(Transform::from_translation(
+                    Vec3::new(0.0, 0.0, 1.0 + i as f32)
+                )),
+                ..default()
+            },
+        ));
     });
 
     // Spawn the player with its physics, sprite, and tween animations.
@@ -59,7 +120,12 @@ fn setup_game(
     commands.spawn((
         Name::new("PlayerEntity"),
         PlayerCapsule,
-        SpatialBundle::INHERITED_IDENTITY,
+        //SpatialBundle::INHERITED_IDENTITY,
+        SpatialBundle {
+            visibility: Visibility::Inherited,
+            transform: Transform::from_xyz(0.0, 0.0, 100.0),
+            ..default()
+        },
         RigidBody::Dynamic,
         Collider::capsule(32.0, 16.0),
         LockedAxes::new()
@@ -99,7 +165,7 @@ fn setup_game(
                 custom_size: Some(Vec2::new(320.0, 32.0)),
                 ..default()
             },
-            transform: Transform::from_xyz(0.0, -104.0, 0.0),
+            transform: Transform::from_xyz(0.0, -104.0, 200.0),
             ..default()
         },
         RigidBody::Static,

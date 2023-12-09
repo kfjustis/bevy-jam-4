@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy::asset::AssetMetaCheck;
 use bevy::render::settings::{Backends, WgpuSettings, RenderCreation};
 use bevy::render::RenderPlugin;
-use bevy::window::{PresentMode, WindowTheme};
+use bevy::window::{PresentMode, WindowTheme, EnabledButtons};
 
 pub struct InitPlugin;
 
@@ -26,6 +26,12 @@ impl Plugin for InitPlugin {
                 WindowPlugin {
                     primary_window: Some(Window {
                         title: win_title.into(),
+                        enabled_buttons: EnabledButtons {
+                            minimize: true,
+                            maximize: false,
+                            close: true
+                        },
+                        resizable: false,
                         resolution: (640., 480.).into(),
                         present_mode: PresentMode::AutoVsync,
                         window_theme: Some(WindowTheme::Dark),
