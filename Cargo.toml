@@ -12,9 +12,9 @@ opt-level = 3
 codegen-units = 1
 
 [dependencies]
-#bevy = { version = "0.12.1", features = ["dynamic_linking"] }
-bevy = { version = "0.12.1" }
+bevy = { version = "0.12.1", features = ["dynamic_linking"] }
 bevy-inspector-egui = { version = "0.21" }
 bevy_scroller = { version = "0.2.1" }
 bevy_tweening = { version = "0.9" }
 bevy_xpbd_2d = { git = "https://github.com/Jondolf/bevy_xpbd", branch = "main", commit = "0a66d81f69f5bb2bfebd768721055b9eb8d4405e", default-features = false, features = ["2d", "f32", "debug-plugin"] }
+rand = "0.8.5"
