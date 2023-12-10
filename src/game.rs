@@ -420,6 +420,8 @@ struct AnimationIndices {
 
 #[derive(Component)]
 struct Healthbar;
+#[derive(Component)]
+struct Shadowbar;
 
 #[derive(Component, Deref, DerefMut)]
 struct AnimationTimer(Timer);
@@ -428,6 +430,28 @@ fn spawn_health_bar(
     mut commands: Commands,
     asset_server: Res<AssetServer>
 ) {
+    commands.spawn((
+        Name::new("EnemyHealthBarShadow"),
+        ProgressBarBundle {
+            progresss_bar: ProgressBar {
+                value: 100.0,
+                max_value: 100.0,
+                ..default()
+            },
+            sprite_bundle: SpriteBundle {
+                texture: asset_server.load("healthbar.png"),
+                sprite: Sprite {
+                    anchor: bevy::sprite::Anchor::CenterLeft,
+                    color: Color::rgb(0.1, 0.1, 0.1),
+                    ..default()
+                },
+                transform: Transform::from_xyz(-125.0, -110.0, 400.0),
+                ..default()
+            },
+            ..default()
+        }
+    ));
+
     // Spawn the health bar.
     commands.spawn((
         Name::new("EnemyHealthBar"),
@@ -444,7 +468,7 @@ fn spawn_health_bar(
                     anchor: bevy::sprite::Anchor::CenterLeft,
                     ..default()
                 },
-                transform: Transform::from_xyz(-125.0, -110.0, 300.0),
+                transform: Transform::from_xyz(-125.0, -110.0, 500.0),
                 ..default()
             },
             ..default()
@@ -457,6 +481,46 @@ fn setup_game(
     asset_server: Res<AssetServer>,
     mut texture_atlases: ResMut<Assets<TextureAtlas>>
 ) {
+    // Health bar text with drop shadow.
+    commands.spawn((
+        OnInGameScreen,
+        Name::new("EnemyHpText"),
+        TextBundle::from_section(
+            "Enemy HP",
+            TextStyle {
+                font_size: 16.0,
+                color: Color::rgb(0.0, 0.0, 0.0),
+                ..default()
+            }
+        )
+        .with_text_alignment(TextAlignment::Center)
+        .with_style(Style {
+            position_type: PositionType::Absolute,
+            bottom: Val::Px(6.0),
+            right: Val::Px(496.0),
+            ..default()
+        })
+    ));
+    commands.spawn((
+        OnInGameScreen,
+        Name::new("EnemyHpText"),
+        TextBundle::from_section(
+            "Enemy HP",
+            TextStyle {
+                font_size: 16.0,
+                color: Color::rgb(1.0, 1.0, 1.0),
+                ..default()
+            }
+        )
+        .with_text_alignment(TextAlignment::Center)
+        .with_style(Style {
+            position_type: PositionType::Absolute,
+            bottom: Val::Px(7.0),
+            right: Val::Px(497.0),
+            ..default()
+        })
+    ));
+
     commands.spawn((
         OnInGameScreen,
         Camera2dBundle {
@@ -515,7 +579,7 @@ fn setup_game(
     });
 
     // Spawn the snow at ~80 z-index.
-    let texture_handle = asset_server.load("snow_fx_sheet_4.png");
+    let texture_handle = asset_server.load("snow_fx_sheet_4_half_opacity.png");
     let texture_atlas = TextureAtlas::from_grid(texture_handle, Vec2::new(320.0, 240.0), 4, 1, None, None);
     let texture_atlas_handle = texture_atlases.add(texture_atlas);
     let animation_indices = AnimationIndices{first: 0, last: 3};
@@ -528,7 +592,7 @@ fn setup_game(
             ..default()
         },
         animation_indices,
-        AnimationTimer(Timer::from_seconds(0.25, TimerMode::Repeating))
+        AnimationTimer(Timer::from_seconds(0.10, TimerMode::Repeating))
     ));
 
     // Spawn the player with its physics, sprite, and tween animations.
@@ -815,18 +879,17 @@ fn spawn_snow(
             //LockedAxes::new().lock_rotation(),
             Friction::ZERO.with_combine_rule(CoefficientCombine::Min),
             Restitution::ZERO.with_combine_rule(CoefficientCombine::Min),
-            Mass(1.0),
+            Mass(100.0),
             Speed(24.0)
         ));
     }
 }
 
 fn move_snow(
-    mut snow: Query<&mut LinearVelocity, With<SnowTile>>
+    mut snow: Query<(&mut LinearVelocity, &Speed), With<SnowTile>>
 ) {
-    let snow_speed = 1.0;
-    for mut linear_vel in &mut snow {
-        linear_vel.x += Vec2::new(-1.0, 0.0).normalize_or_zero().x * snow_speed;
+    for (mut linear_vel, speed) in &mut snow {
+        linear_vel.x += Vec2::new(-1.0, 0.0).normalize_or_zero().x * speed.0;
     }
 }
 
@@ -860,8 +923,8 @@ fn collide_snow_with_enemy(
         if colliding_entities.contains(&enemy.single())
         {
             let mut rng = rand::thread_rng();
-            //let damage: f32 = rng.gen_range(0.01..1.5);3
-            let damage: f32 = rng.gen_range(10.0..20.0);
+            let damage: f32 = rng.gen_range(0.01..1.5);
+            // Debugging... let damage: f32 = rng.gen_range(10.0..20.0);
             enemy_health.single_mut().0 -= damage;
 
             // Mark the snow tile as used.
@@ -871,7 +934,7 @@ fn collide_snow_with_enemy(
 }
 
 fn update_health_bar(
-    mut query: Query<&mut ProgressBar>,
+    mut query: Query<&mut ProgressBar, With<Healthbar>>,
     health_query: Query<&EnemyHealth>,
     dt: Res<Time>,
     mut app_state: ResMut<NextState<AppState>>
