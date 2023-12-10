@@ -787,8 +787,13 @@ fn anim_player(
     keys: Res<Input<KeyCode>>,
     mut animators: Query<&mut Animator<Transform>, With<PlayerSprite>>
 ) {
-    let hold_action = keys.any_pressed([KeyCode::Space]);
-
+    let hold_action = keys.any_pressed([
+        KeyCode::Space,
+        KeyCode::Z, KeyCode::X, KeyCode::C,
+        KeyCode::Return,
+        KeyCode::Tab,
+        KeyCode::ShiftLeft,
+        KeyCode::ShiftRight]);
     for mut animator in animators.iter_mut() {
         let base_duration_ms: u64 = 500;
         let norm_speed = animator.speed() < 1.5f32;
@@ -974,7 +979,13 @@ fn collide_snow_with_player(
     mut collisions: Query<(Entity, &mut LinearVelocity, &CollidingEntities), With<SnowTile>>
 ) {
     let force = 160.0;
-    let hold_action = keys.any_pressed([KeyCode::Space]);
+    let hold_action = keys.any_pressed([
+        KeyCode::Space,
+        KeyCode::Z, KeyCode::X, KeyCode::C,
+        KeyCode::Return,
+        KeyCode::Tab,
+        KeyCode::ShiftLeft,
+        KeyCode::ShiftRight]);
     for (entity, mut linear_vel, colliding_entities) in &mut collisions {
         if hold_action && colliding_entities.contains(&player.single())
         {
