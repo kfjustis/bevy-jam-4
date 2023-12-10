@@ -1,7 +1,6 @@
 use bevy::prelude::*;
 use bevy_inspector_egui::prelude::*;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
-use bevy_health_bar::{ProgressBar, ProgressBarBundle, ProgressBarPlugin};
 use bevy::render::camera::ScalingMode;
 use bevy_scroller::{
     Scroller, ScrollerBundle, ScrollerDirection, ScrollerPlugin, ScrollerSize, SingleSpriteGenerator
@@ -11,6 +10,8 @@ use bevy_xpbd_2d::{math::*, prelude::*};
 use rand::Rng;
 use std::collections::VecDeque;
 
+use crate::progressbar::*;
+
 pub struct GamePlugin;
 
 impl Plugin for GamePlugin {
@@ -18,7 +19,6 @@ impl Plugin for GamePlugin {
         // Plugins.
         app.add_plugins((
             PhysicsPlugins::default(),
-            ProgressBarPlugin,
             ScrollerPlugin,
             TweeningPlugin,
             // Debugging...
