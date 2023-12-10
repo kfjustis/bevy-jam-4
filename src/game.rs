@@ -67,7 +67,7 @@ impl Plugin for GamePlugin {
 
         // InGame state systems.
         app.add_systems(OnEnter(AppState::InGame),
-            (setup_game, setup_snow, reset_health_bar).chain()
+            (setup_game, setup_snow_and_projectiles, reset_health_bar).chain()
         );
         app.add_systems(Update, (
                 anim_snow_fx,
@@ -77,6 +77,8 @@ impl Plugin for GamePlugin {
                 move_player,
                 spawn_snow,
                 move_snow,
+                spawn_enemy_projectiles,
+                move_enemy_projectiles,
                 collide_snow_with_player,
                 collide_snow_with_enemy,
                 update_health_bar,
@@ -372,6 +374,9 @@ struct PlayerSprite;
 #[derive(Component)]
 struct EnemyCapsule;
 
+#[derive(Component)]
+struct EnemyProjectile;
+
 #[derive(Component, Reflect, InspectorOptions)]
 #[reflect(InspectorOptions)]
 struct EnemyHealth (f32);
@@ -396,11 +401,19 @@ struct SnowConfig {
     timer: Timer,
 }
 
+#[derive(Resource)]
+struct ProjectileConfig {
+    // How often the projectiles should spawn.
+    timer: Timer,
+}
+
+
 // Define the collision layers
 #[derive(PhysicsLayer)]
 enum Layer {
     Player,
     Enemy,
+    EnemyProjectile,
     Wall,
     Ground,
     Snow
@@ -432,6 +445,7 @@ fn spawn_health_bar(
 ) {
     commands.spawn((
         Name::new("EnemyHealthBarShadow"),
+        Shadowbar,
         ProgressBarBundle {
             progresss_bar: ProgressBar {
                 value: 100.0,
@@ -610,7 +624,7 @@ fn setup_game(
         RigidBody::Dynamic,
         Collider::capsule(32.0, 16.0),
         CollisionLayers::new([Layer::Player],
-            [Layer::Ground, Layer::Wall, Layer::Snow]),
+            [Layer::Ground, Layer::Wall, Layer::Snow, Layer::EnemyProjectile]),
         LockedAxes::new().lock_rotation(),
         Friction::ZERO.with_combine_rule(CoefficientCombine::Min),
         Restitution::ZERO.with_combine_rule(CoefficientCombine::Min),
@@ -835,13 +849,19 @@ fn move_player(
     }
 }
 
-fn setup_snow(
+fn setup_snow_and_projectiles(
     mut commands: Commands
 ) {
     commands.insert_resource(
         SnowConfig {
             // Create the repeating timer.
             timer: Timer::new(std::time::Duration::from_millis(500), TimerMode::Repeating)
+        }
+    );
+    commands.insert_resource(
+        ProjectileConfig {
+            // Create the repeating timer.
+            timer: Timer::new(std::time::Duration::from_millis(1200), TimerMode::Repeating)
         }
     );
 }
@@ -875,8 +895,7 @@ fn spawn_snow(
             RigidBody::Dynamic,
             Collider::cuboid(32.0, 32.0),
             CollisionLayers::new([Layer::Snow],
-                [Layer::Player, Layer::Ground, Layer::Enemy]),
-            //LockedAxes::new().lock_rotation(),
+                [Layer::Player, Layer::Ground, Layer::Enemy, Layer::EnemyProjectile]),
             Friction::ZERO.with_combine_rule(CoefficientCombine::Min),
             Restitution::ZERO.with_combine_rule(CoefficientCombine::Min),
             Mass(100.0),
@@ -890,6 +909,57 @@ fn move_snow(
 ) {
     for (mut linear_vel, speed) in &mut snow {
         linear_vel.x += Vec2::new(-1.0, 0.0).normalize_or_zero().x * speed.0;
+    }
+}
+
+fn spawn_enemy_projectiles(
+    mut commands: Commands,
+    enemy_query: Query<&Transform, With<EnemyCapsule>>,
+    asset_server: Res<AssetServer>,
+    time: Res<Time>,
+    mut config: ResMut<ProjectileConfig>
+) {
+    // Tick the snow timer.
+    config.timer.tick(time.delta());
+
+    if config.timer.finished() {
+        // Spawn the projectile sprite with its physics components.
+        commands.spawn((
+            OnInGameScreen,
+            Name::new("EnemyProjectile"),
+            EnemyProjectile,
+            SpriteBundle {
+                texture: asset_server.load("enemy_projectile.png"),
+                transform: enemy_query.single().clone(),
+                ..default()
+            },
+            RigidBody::Dynamic,
+            Collider::cuboid(8.0, 8.0),
+            CollisionLayers::new([Layer::EnemyProjectile],
+                [Layer::Player, Layer::Snow]),
+            Friction::ZERO.with_combine_rule(CoefficientCombine::Min),
+            Restitution::ZERO.with_combine_rule(CoefficientCombine::Min),
+            Mass(10.0),
+            LinearVelocity(Vec2::new(0.0, 200.0)),
+            Speed(10.0)
+        ));
+    }
+}
+
+fn move_enemy_projectiles(
+    mut projectiles: Query<(&mut AngularVelocity, &mut LinearVelocity, &Speed), With<EnemyProjectile>>
+) {
+    for (mut ang_vel, mut lin_vel, speed) in &mut projectiles {
+        let mut rng = rand::thread_rng();
+        let av: f32 = rng.gen_range(-1.0..1.0);
+        let x_vel: f32 = rng.gen_range(-3.0..3.0);
+        let friction: f32 = 0.8;
+
+        ang_vel.0 += av;
+        ang_vel.0 *= friction;
+
+        lin_vel.x += x_vel * friction;
+        lin_vel.y -= speed.0 * friction;
     }
 }
 
@@ -923,7 +993,7 @@ fn collide_snow_with_enemy(
         if colliding_entities.contains(&enemy.single())
         {
             let mut rng = rand::thread_rng();
-            let damage: f32 = rng.gen_range(0.01..1.5);
+            let damage: f32 = rng.gen_range(0.01..5.0);
             // Debugging... let damage: f32 = rng.gen_range(10.0..20.0);
             enemy_health.single_mut().0 -= damage;
 
@@ -1089,19 +1159,28 @@ fn setup_lose_screen(
 }
 
 fn reset_health_bar(
-    mut query: Query<(&mut Visibility, &mut ProgressBar), With<Healthbar>>
+    mut hbar_query: Query<(&mut Visibility, &mut ProgressBar), (With<Healthbar>, Without<Shadowbar>)>,
+    mut sbar_query: Query<(&mut Visibility, &mut ProgressBar), (With<Shadowbar>, Without<Healthbar>)>
 ) {
-    //let mut hbar = query.single_mut();
-    //*hbar = Visibility::Visible;
-    for (mut v, mut hbar) in &mut query {
+    for (mut v, mut hbar) in &mut hbar_query {
         *v = Visibility::Visible;
         hbar.value = 100.0;
+    }
+
+    for (mut v, mut sbar) in &mut sbar_query {
+        *v = Visibility::Visible;
+        sbar.value = 100.0;
     }
 }
 
 fn hide_health_bar(
-    mut query: Query<&mut Visibility, With<Healthbar>>,
+    mut hbar: Query<&mut Visibility, (With<Healthbar>, Without<Shadowbar>)>,
+    mut sbar: Query<&mut Visibility, (With<Shadowbar>, Without<Healthbar>)>,
 ) {
-    let mut hbar = query.single_mut();
-    *hbar = Visibility::Hidden;
+    for mut b in &mut hbar {
+        *b = Visibility::Hidden;
+    }
+    for mut b in &mut sbar {
+        *b = Visibility::Hidden;
+    }
 }
