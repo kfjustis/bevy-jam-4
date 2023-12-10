@@ -49,7 +49,7 @@ impl Plugin for GamePlugin {
             ).run_if(in_state(AppState::MainMenu))
         );
         app.add_systems(OnExit(AppState::MainMenu),
-            despawn_main_menu::<OnMainMenuScreen>
+            despawn_screen::<OnMainMenuScreen>
         );
 
         // Credits state systems.
@@ -62,12 +62,12 @@ impl Plugin for GamePlugin {
             ).run_if(in_state(AppState::Credits))
         );
         app.add_systems(OnExit(AppState::Credits),
-            despawn_credits::<OnCreditsScreen>
+            despawn_screen::<OnCreditsScreen>
         );
 
         // InGame state systems.
         app.add_systems(OnEnter(AppState::InGame),
-            (setup_game, setup_snow).chain()
+            (setup_game, setup_snow, reset_health_bar).chain()
         );
         app.add_systems(Update, (
                 anim_snow_fx,
@@ -83,6 +83,36 @@ impl Plugin for GamePlugin {
                 remove_snow
             ).chain()
             .run_if(in_state(AppState::InGame))
+        );
+        app.add_systems(OnExit(AppState::InGame), (
+                hide_health_bar,
+                despawn_screen::<OnInGameScreen>
+            )
+        );
+
+        // Win state systems.
+        app.add_systems(OnEnter(AppState::Win),
+            setup_win_screen
+        );
+        app.add_systems(Update, (
+                action_credits,
+                button_credits
+            ).run_if(in_state(AppState::Win))
+        );
+        app.add_systems(OnExit(AppState::Win),
+            despawn_screen::<OnWinGameScreen>
+        );
+        // Lose state systems.
+        app.add_systems(OnEnter(AppState::Lose),
+            setup_lose_screen
+        );
+        app.add_systems(Update, (
+                action_credits,
+                button_credits
+            ).run_if(in_state(AppState::Lose))
+        );
+        app.add_systems(OnExit(AppState::Lose),
+            despawn_screen::<OnLoseGameScreen>
         );
     }
 }
@@ -113,6 +143,15 @@ struct OnMainMenuScreen;
 #[derive(Component)]
 struct OnCreditsScreen;
 
+#[derive(Component)]
+struct OnInGameScreen;
+
+#[derive(Component)]
+struct OnWinGameScreen;
+
+#[derive(Component)]
+struct OnLoseGameScreen;
+
 // Tag to mark the selected button.
 #[derive(Component)]
 struct SelectedButton;
@@ -123,10 +162,8 @@ enum MainMenuButtonActions {
     Start,
     Credits
 }
-
-// All possible button actions for the credits screen.
 #[derive(Component)]
-enum CreditsButtonActions {
+enum OtherButtonActions {
     Back
 }
 
@@ -223,13 +260,13 @@ fn action_main_menu(
 }
 
 fn action_credits(
-    interaction_query: Query<(&Interaction, &CreditsButtonActions), (Changed<Interaction>, With<Button>)>,
+    interaction_query: Query<(&Interaction, &OtherButtonActions), (Changed<Interaction>, With<Button>)>,
     mut app_state: ResMut<NextState<AppState>>
 ) {
     for (interaction, button_action) in &interaction_query {
         if *interaction == Interaction::Pressed {
             match button_action {
-                CreditsButtonActions::Back => {
+                OtherButtonActions::Back => {
                     app_state.set(AppState::MainMenu);
                 }
             }
@@ -260,24 +297,6 @@ fn button_credits(
             (Interaction::Hovered, None) => HOVERED_BUTTON.into(),
             (Interaction::None, None) => NORMAL_BUTTON.into(),
         }
-    }
-}
-
-fn despawn_main_menu<T: Component>(
-    mut commands: Commands,
-    to_despawn: Query<Entity, With<T>>
-) {
-    for entity in &to_despawn {
-        commands.entity(entity).despawn_recursive();
-    }
-}
-
-fn despawn_credits<T: Component>(
-    mut commands: Commands,
-    to_despawn: Query<Entity, With<T>>
-) {
-    for entity in &to_despawn {
-        commands.entity(entity).despawn_recursive();
     }
 }
 
@@ -326,7 +345,7 @@ fn setup_credits(
                 background_color: NORMAL_BUTTON.into(),
                 ..default()
             },
-            CreditsButtonActions::Back,
+            OtherButtonActions::Back,
         ))
         .with_children(|parent| {
             parent.spawn(TextBundle::from_section(
@@ -399,6 +418,9 @@ struct AnimationIndices {
     last: usize,
 }
 
+#[derive(Component)]
+struct Healthbar;
+
 #[derive(Component, Deref, DerefMut)]
 struct AnimationTimer(Timer);
 
@@ -409,6 +431,7 @@ fn spawn_health_bar(
     // Spawn the health bar.
     commands.spawn((
         Name::new("EnemyHealthBar"),
+        Healthbar,
         ProgressBarBundle {
             progresss_bar: ProgressBar {
                 value: 100.0,
@@ -434,16 +457,19 @@ fn setup_game(
     asset_server: Res<AssetServer>,
     mut texture_atlases: ResMut<Assets<TextureAtlas>>
 ) {
-    commands.spawn(Camera2dBundle {
-        projection: OrthographicProjection {
-            scale: 1.0,
-            scaling_mode: ScalingMode::Fixed { width: 320.0, height: 240.0 },
-            near: -1000.0,
-            far: 1000.0,
+    commands.spawn((
+        OnInGameScreen,
+        Camera2dBundle {
+            projection: OrthographicProjection {
+                scale: 1.0,
+                scaling_mode: ScalingMode::Fixed { width: 320.0, height: 240.0 },
+                near: -1000.0,
+                far: 1000.0,
+                ..default()
+            },
             ..default()
-        },
-        ..default()
-    });
+        }
+    ));
 
     // Spawn the bg layers.
     let bg_layers = (0..=4)
@@ -465,6 +491,7 @@ fn setup_game(
     let scroller_speed_step = 0.2;
     bg_sizes.into_iter().enumerate().for_each(|(i, size)| {
         commands.spawn((
+            OnInGameScreen,
             ScrollerSize {
                 size: Vec2::new(320.0, 240.0)
             },
@@ -493,6 +520,7 @@ fn setup_game(
     let texture_atlas_handle = texture_atlases.add(texture_atlas);
     let animation_indices = AnimationIndices{first: 0, last: 3};
     commands.spawn((
+        OnInGameScreen,
         SpriteSheetBundle {
             texture_atlas: texture_atlas_handle,
             sprite: TextureAtlasSprite::new(animation_indices.first),
@@ -507,6 +535,7 @@ fn setup_game(
     // The sprite is a child of the capsule/SpatialBundle so it can
     // rotate independently.
     commands.spawn((
+        OnInGameScreen,
         Name::new("PlayerEntity"),
         PlayerCapsule,
         SpatialBundle {
@@ -550,6 +579,7 @@ fn setup_game(
     // The sprite is a child of the capsule/SpatialBundle so it can
     // rotate independently.
     commands.spawn((
+        OnInGameScreen,
         Name::new("EnemyEntity"),
         EnemyCapsule,
         EnemyDirection(1.0),
@@ -574,6 +604,7 @@ fn setup_game(
 
     // Spawn the ground.
     commands.spawn((
+        OnInGameScreen,
         Name::new("Ground"),
         SpriteBundle {
             sprite: Sprite {
@@ -592,6 +623,7 @@ fn setup_game(
 
     // Spawn the walls.
     commands.spawn((
+        OnInGameScreen,
         Name::new("WallEntityL"),
         Wall,
         SpatialBundle {
@@ -605,6 +637,7 @@ fn setup_game(
             [Layer::Player]),
     ));
     commands.spawn((
+        OnInGameScreen,
         Name::new("WallEntityR"),
         Wall,
         SpatialBundle {
@@ -766,6 +799,7 @@ fn spawn_snow(
         let path = sprites[sprite_idx];
         // Spawn the snow sprite with its physics components.
         commands.spawn((
+            OnInGameScreen,
             Name::new("SnowTile"),
             SnowTile,
             SpriteBundle {
@@ -826,7 +860,8 @@ fn collide_snow_with_enemy(
         if colliding_entities.contains(&enemy.single())
         {
             let mut rng = rand::thread_rng();
-            let damage: f32 = rng.gen_range(0.01..1.5);
+            //let damage: f32 = rng.gen_range(0.01..1.5);3
+            let damage: f32 = rng.gen_range(10.0..20.0);
             enemy_health.single_mut().0 -= damage;
 
             // Mark the snow tile as used.
@@ -839,11 +874,15 @@ fn update_health_bar(
     mut query: Query<&mut ProgressBar>,
     health_query: Query<&EnemyHealth>,
     dt: Res<Time>,
+    mut app_state: ResMut<NextState<AppState>>
 ) {
     for mut healthbar in query.iter_mut() {
         let health = health_query.single().0;
         if health < healthbar.value {
             healthbar.value -= (healthbar.max_value - health) * dt.delta_seconds();
+        }
+        if healthbar.value <= 0.0 {
+            app_state.set(AppState::Win);
         }
     }
 }
@@ -859,4 +898,147 @@ fn remove_snow(
             commands.entity(entity).despawn_recursive();
         }
     }
+}
+
+fn despawn_screen<T: Component>(
+    mut commands: Commands,
+    to_despawn: Query<Entity, With<T>>
+) {
+    for entity in &to_despawn {
+        commands.entity(entity).despawn_recursive();
+    }
+}
+
+fn setup_win_screen(
+    mut commands: Commands
+) {
+    // Define the base button styles.
+    let button_style = Style {
+        width: Val::Px(250.0),
+        height: Val::Px(65.0),
+        margin: UiRect::all(Val::Px(20.0)),
+        justify_content: JustifyContent::Center,
+        align_items: AlignItems::Center,
+        ..default()
+    };
+    let button_text_style = TextStyle {
+        font_size: 40.0,
+        color: TEXT_COLOR,
+        ..default()
+    };
+
+    // Set up the button layout using nodes.
+    commands.spawn((
+        OnWinGameScreen,
+        NodeBundle {
+            style: Style {
+                width: Val::Percent(100.0),
+                flex_direction: FlexDirection::Column,
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            ..default()
+        }
+    ))
+    .with_children(|parent| {
+        // Title text.
+        parent.spawn(TextBundle::from_section(
+            "You Win!",
+            button_text_style.clone()
+        ));
+        // Start button.
+        parent.spawn((
+            ButtonBundle {
+                style: button_style.clone(),
+                background_color: NORMAL_BUTTON.into(),
+                ..default()
+            },
+            OtherButtonActions::Back,
+        ))
+        .with_children(|parent| {
+            parent.spawn(TextBundle::from_section(
+                "Return to Main Menu",
+                button_text_style.clone()
+            ));
+        });
+    });
+    // Create camera to view the menu.
+    commands.spawn(Camera2dBundle::default()).insert(OnWinGameScreen);
+}
+
+fn setup_lose_screen(
+    mut commands: Commands
+) {
+    // Define the base button styles.
+    let button_style = Style {
+        width: Val::Px(250.0),
+        height: Val::Px(65.0),
+        margin: UiRect::all(Val::Px(20.0)),
+        justify_content: JustifyContent::Center,
+        align_items: AlignItems::Center,
+        ..default()
+    };
+    let button_text_style = TextStyle {
+        font_size: 40.0,
+        color: TEXT_COLOR,
+        ..default()
+    };
+
+    // Set up the button layout using nodes.
+    commands.spawn((
+        OnLoseGameScreen,
+        NodeBundle {
+            style: Style {
+                width: Val::Percent(100.0),
+                flex_direction: FlexDirection::Column,
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            ..default()
+        }
+    ))
+    .with_children(|parent| {
+        // Title text.
+        parent.spawn(TextBundle::from_section(
+            "You Lose!",
+            button_text_style.clone()
+        ));
+        // Start button.
+        parent.spawn((
+            ButtonBundle {
+                style: button_style.clone(),
+                background_color: NORMAL_BUTTON.into(),
+                ..default()
+            },
+            OtherButtonActions::Back,
+        ))
+        .with_children(|parent| {
+            parent.spawn(TextBundle::from_section(
+                "Return to Main Menu",
+                button_text_style.clone()
+            ));
+        });
+    });
+    // Create camera to view the menu.
+    commands.spawn(Camera2dBundle::default()).insert(OnLoseGameScreen);
+}
+
+fn reset_health_bar(
+    mut query: Query<(&mut Visibility, &mut ProgressBar), With<Healthbar>>
+) {
+    //let mut hbar = query.single_mut();
+    //*hbar = Visibility::Visible;
+    for (mut v, mut hbar) in &mut query {
+        *v = Visibility::Visible;
+        hbar.value = 100.0;
+    }
+}
+
+fn hide_health_bar(
+    mut query: Query<&mut Visibility, With<Healthbar>>,
+) {
+    let mut hbar = query.single_mut();
+    *hbar = Visibility::Hidden;
 }
