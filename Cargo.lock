@@ -403,6 +403,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy-inspector-egui",
+ "bevy_health_bar",
  "bevy_scroller",
  "bevy_tweening",
  "bevy_xpbd_2d",
@@ -701,6 +702,15 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+]
+
+[[package]]
+name = "bevy_health_bar"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "730aab821dd160d6b41209d2ab78753e92050d7a041409565ef735f3bfe41635"
+dependencies = [
+ "bevy",
 ]
 
 [[package]]

@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use bevy_inspector_egui::prelude::*;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use bevy_health_bar::{ProgressBar, ProgressBarBundle, ProgressBarPlugin};
 use bevy::render::camera::ScalingMode;
 use bevy_scroller::{
     Scroller, ScrollerBundle, ScrollerDirection, ScrollerPlugin, ScrollerSize, SingleSpriteGenerator
@@ -14,28 +15,331 @@ pub struct GamePlugin;
 
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
+        // Plugins.
         app.add_plugins((
             PhysicsPlugins::default(),
             PhysicsDebugPlugin::default(),
+            ProgressBarPlugin,
             ScrollerPlugin,
             TweeningPlugin,
             WorldInspectorPlugin::new()
         ));
+
+        // App state.
+        app.add_state::<AppState>();
+
+        // Debug types.
         app.register_type::<Speed>();
-        app.add_systems(Startup, (setup_game, setup_snow).chain());
+        app.register_type::<EnemyDirection>();
+        app.register_type::<EnemyHealth>();
+
+        // Resources.
+        app.insert_resource(ClearColor(Color::rgb(0.0, 0.0, 0.0)));
+        app.insert_resource(Gravity(Vector::NEG_Y * 100.0 * 10.0));
+
+        app.add_systems(Startup, spawn_health_bar);
+
+        // MainMenu state sytems.
+        app.add_systems(OnEnter(AppState::MainMenu),
+            setup_main_menu
+        );
+        app.add_systems(Update, (
+                action_main_menu,
+                button_main_menu
+            ).run_if(in_state(AppState::MainMenu))
+        );
+        app.add_systems(OnExit(AppState::MainMenu),
+            despawn_main_menu::<OnMainMenuScreen>
+        );
+
+        // Credits state systems.
+        app.add_systems(OnEnter(AppState::Credits),
+            setup_credits
+        );
+        app.add_systems(Update, (
+                action_credits,
+                button_credits
+            ).run_if(in_state(AppState::Credits))
+        );
+        app.add_systems(OnExit(AppState::Credits),
+            despawn_credits::<OnCreditsScreen>
+        );
+
+        // InGame state systems.
+        app.add_systems(OnEnter(AppState::InGame),
+            (setup_game, setup_snow).chain()
+        );
         app.add_systems(Update, (
                 anim_snow_fx,
+                anim_enemy,
+                move_enemy,
                 anim_player,
                 move_player,
                 spawn_snow,
                 move_snow,
-                collide_snow,
+                collide_snow_with_player,
+                collide_snow_with_enemy,
+                update_health_bar,
                 remove_snow
-            ).chain());
-        app.insert_resource(ClearColor(Color::rgb(0.0, 0.0, 0.0)));
-        app.insert_resource(Gravity(Vector::NEG_Y * 100.0 * 10.0));
+            ).chain()
+            .run_if(in_state(AppState::InGame))
+        );
     }
 }
+
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, States)]
+enum AppState {
+    MainMenu,
+    Credits,
+    #[default]
+    InGame,
+    Win,
+    Lose
+}
+
+// MainMenu data and functions...
+
+// Text and button styling.
+const TEXT_COLOR: Color = Color::rgb(0.9, 0.9, 0.9);
+const NORMAL_BUTTON: Color = Color::rgb(0.15, 0.15, 0.15);
+const HOVERED_BUTTON: Color = Color::rgb(0.25, 0.25, 0.25);
+const HOVERED_PRESSED_BUTTON: Color = Color::rgb(0.25, 0.65, 0.25);
+const PRESSED_BUTTON: Color = Color::rgb(0.35, 0.75, 0.35);
+
+// Tag for entities added to the main menu.
+#[derive(Component)]
+struct OnMainMenuScreen;
+
+#[derive(Component)]
+struct OnCreditsScreen;
+
+// Tag to mark the selected button.
+#[derive(Component)]
+struct SelectedButton;
+
+// All possible button actions for the main menu.
+#[derive(Component)]
+enum MainMenuButtonActions {
+    Start,
+    Credits
+}
+
+// All possible button actions for the credits screen.
+#[derive(Component)]
+enum CreditsButtonActions {
+    Back
+}
+
+fn setup_main_menu(
+    mut commands: Commands
+) {
+    // Define the base button styles.
+    let button_style = Style {
+        width: Val::Px(250.0),
+        height: Val::Px(65.0),
+        margin: UiRect::all(Val::Px(20.0)),
+        justify_content: JustifyContent::Center,
+        align_items: AlignItems::Center,
+        ..default()
+    };
+    let button_text_style = TextStyle {
+        font_size: 40.0,
+        color: TEXT_COLOR,
+        ..default()
+    };
+
+    // Set up the button layout using nodes.
+    commands.spawn((
+        OnMainMenuScreen,
+        NodeBundle {
+            style: Style {
+                width: Val::Percent(100.0),
+                min_height: Val::Percent(100.0),
+                flex_direction: FlexDirection::Column,
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            ..default()
+        }
+    ))
+    .with_children(|parent| {
+        // Title text.
+        parent.spawn(TextBundle::from_section(
+            "Lots of Snow",
+            button_text_style.clone()
+        ));
+        // Start button.
+        parent.spawn((
+            ButtonBundle {
+                style: button_style.clone(),
+                background_color: NORMAL_BUTTON.into(),
+                ..default()
+            },
+            MainMenuButtonActions::Start,
+        ))
+        .with_children(|parent| {
+            parent.spawn(TextBundle::from_section(
+                "Start",
+                button_text_style.clone()
+            ));
+        });
+        // Credits button.
+        parent.spawn((
+            ButtonBundle {
+                style: button_style.clone(),
+                background_color: NORMAL_BUTTON.into(),
+                ..default()
+            },
+            MainMenuButtonActions::Credits
+        ))
+        .with_children(|parent| {
+            parent.spawn(TextBundle::from_section(
+                "Credits",
+                button_text_style.clone()
+            ));
+        });
+    });
+    // Create camera to view the menu.
+    commands.spawn(Camera2dBundle::default()).insert(OnMainMenuScreen);
+}
+
+fn action_main_menu(
+    interaction_query: Query<(&Interaction, &MainMenuButtonActions), (Changed<Interaction>, With<Button>)>,
+    mut app_state: ResMut<NextState<AppState>>
+) {
+    for (interaction, button_action) in &interaction_query {
+        if *interaction == Interaction::Pressed {
+            match button_action {
+                MainMenuButtonActions::Start => {
+                    app_state.set(AppState::InGame);
+                },
+                MainMenuButtonActions::Credits => {
+                    app_state.set(AppState::Credits);
+                }
+            }
+        }
+    }
+}
+
+fn action_credits(
+    interaction_query: Query<(&Interaction, &CreditsButtonActions), (Changed<Interaction>, With<Button>)>,
+    mut app_state: ResMut<NextState<AppState>>
+) {
+    for (interaction, button_action) in &interaction_query {
+        if *interaction == Interaction::Pressed {
+            match button_action {
+                CreditsButtonActions::Back => {
+                    app_state.set(AppState::MainMenu);
+                }
+            }
+        }
+    }
+}
+
+fn button_main_menu(
+    mut query: Query<(&Interaction , &mut BackgroundColor, Option<&SelectedButton>), (Changed<Interaction>, With<Button>)>
+) {
+    for (interaction, mut color, selected) in &mut query {
+        *color = match (*interaction, selected) {
+            (Interaction::Pressed, _) | (Interaction::None, Some(_)) => PRESSED_BUTTON.into(),
+            (Interaction::Hovered, Some(_)) => HOVERED_PRESSED_BUTTON.into(),
+            (Interaction::Hovered, None) => HOVERED_BUTTON.into(),
+            (Interaction::None, None) => NORMAL_BUTTON.into(),
+        }
+    }
+}
+
+fn button_credits(
+    mut query: Query<(&Interaction , &mut BackgroundColor, Option<&SelectedButton>), (Changed<Interaction>, With<Button>)>
+) {
+    for (interaction, mut color, selected) in &mut query {
+        *color = match (*interaction, selected) {
+            (Interaction::Pressed, _) | (Interaction::None, Some(_)) => PRESSED_BUTTON.into(),
+            (Interaction::Hovered, Some(_)) => HOVERED_PRESSED_BUTTON.into(),
+            (Interaction::Hovered, None) => HOVERED_BUTTON.into(),
+            (Interaction::None, None) => NORMAL_BUTTON.into(),
+        }
+    }
+}
+
+fn despawn_main_menu<T: Component>(
+    mut commands: Commands,
+    to_despawn: Query<Entity, With<T>>
+) {
+    for entity in &to_despawn {
+        commands.entity(entity).despawn_recursive();
+    }
+}
+
+fn despawn_credits<T: Component>(
+    mut commands: Commands,
+    to_despawn: Query<Entity, With<T>>
+) {
+    for entity in &to_despawn {
+        commands.entity(entity).despawn_recursive();
+    }
+}
+
+fn setup_credits(
+    mut commands: Commands
+) {
+    // Define the base button styles.
+    let button_style = Style {
+        width: Val::Px(250.0),
+        height: Val::Px(65.0),
+        margin: UiRect::all(Val::Px(20.0)),
+        justify_content: JustifyContent::Center,
+        align_items: AlignItems::Center,
+        ..default()
+    };
+    let button_text_style = TextStyle {
+        font_size: 40.0,
+        color: TEXT_COLOR,
+        ..default()
+    };
+
+    // Set up the button layout using nodes.
+    commands.spawn((
+        OnCreditsScreen,
+        NodeBundle {
+            style: Style {
+                width: Val::Percent(100.0),
+                flex_direction: FlexDirection::Column,
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            ..default()
+        }
+    ))
+    .with_children(|parent| {
+        // Title text.
+        parent.spawn(TextBundle::from_section(
+            "Credits",
+            button_text_style.clone()
+        ));
+        // Start button.
+        parent.spawn((
+            ButtonBundle {
+                style: button_style.clone(),
+                background_color: NORMAL_BUTTON.into(),
+                ..default()
+            },
+            CreditsButtonActions::Back,
+        ))
+        .with_children(|parent| {
+            parent.spawn(TextBundle::from_section(
+                "Back",
+                button_text_style.clone()
+            ));
+        });
+    });
+    // Create camera to view the menu.
+    commands.spawn(Camera2dBundle::default()).insert(OnCreditsScreen);
+}
+
+// InGame data and functions...
 
 #[derive(Resource)]
 pub struct ScrollerImages(Vec<Handle<Image>>);
@@ -45,6 +349,17 @@ struct PlayerCapsule;
 
 #[derive(Component)]
 struct PlayerSprite;
+
+#[derive(Component)]
+struct EnemyCapsule;
+
+#[derive(Component, Reflect, InspectorOptions)]
+#[reflect(InspectorOptions)]
+struct EnemyHealth (f32);
+
+#[derive(Component, Reflect, InspectorOptions)]
+#[reflect(InspectorOptions)]
+struct EnemyDirection(f32);
 
 #[derive(Component, Reflect, InspectorOptions)]
 #[reflect(InspectorOptions)]
@@ -66,6 +381,7 @@ struct SnowConfig {
 #[derive(PhysicsLayer)]
 enum Layer {
     Player,
+    Enemy,
     Wall,
     Ground,
     Snow
@@ -75,6 +391,9 @@ enum Layer {
 struct ToDelete;
 
 #[derive(Component)]
+struct DidDamage;
+
+#[derive(Component)]
 struct AnimationIndices {
     first: usize,
     last: usize,
@@ -82,6 +401,33 @@ struct AnimationIndices {
 
 #[derive(Component, Deref, DerefMut)]
 struct AnimationTimer(Timer);
+
+fn spawn_health_bar(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>
+) {
+    // Spawn the health bar.
+    commands.spawn((
+        Name::new("EnemyHealthBar"),
+        ProgressBarBundle {
+            progresss_bar: ProgressBar {
+                value: 100.0,
+                max_value: 100.0,
+                ..default()
+            },
+            sprite_bundle: SpriteBundle {
+                texture: asset_server.load("healthbar.png"),
+                sprite: Sprite {
+                    anchor: bevy::sprite::Anchor::CenterLeft,
+                    ..default()
+                },
+                transform: Transform::from_xyz(-125.0, -110.0, 300.0),
+                ..default()
+            },
+            ..default()
+        }
+    ));
+}
 
 fn setup_game(
     mut commands: Commands,
@@ -200,6 +546,32 @@ fn setup_game(
             Animator::new(tween)));
     });
 
+    // Spawn the enemy with its physics, sprite, and tween animations.
+    // The sprite is a child of the capsule/SpatialBundle so it can
+    // rotate independently.
+    commands.spawn((
+        Name::new("EnemyEntity"),
+        EnemyCapsule,
+        EnemyDirection(1.0),
+        EnemyHealth(100.0),
+        SpriteBundle {
+            texture: asset_server.load("enemy.png"),
+            transform: Transform::from_xyz(64.0, 96.0, 100.0)
+                .with_scale(Vec3::new(2.0, 2.0, 1.0)),
+            ..default()
+        },
+        RigidBody::Dynamic,
+        Collider::ball(8.0),
+        CollisionLayers::new([Layer::Enemy],
+            [Layer::Snow]),
+        Sensor,
+        Friction::ZERO.with_combine_rule(CoefficientCombine::Min),
+        Restitution::ZERO.with_combine_rule(CoefficientCombine::Min),
+        GravityScale(0.0),
+        Mass(0.0),
+        Speed(32.0)
+    ));
+
     // Spawn the ground.
     commands.spawn((
         Name::new("Ground"),
@@ -260,6 +632,42 @@ fn anim_snow_fx (
                 sprite.index + 1
             };
         }
+    }
+}
+
+fn anim_enemy(
+    mut query: Query<(&mut AngularVelocity, &EnemyDirection), With<EnemyCapsule>>
+) {
+    for (mut angular_velocity, dir) in query.iter_mut() {
+        angular_velocity.0 += 1.0 * dir.0;
+
+        // Apply friction.
+        let enemy_friction = 0.8;
+        angular_velocity.0 *= enemy_friction;
+    }
+}
+
+fn move_enemy(
+    mut enemy: Query<(&mut LinearVelocity, &mut EnemyDirection, &Transform), With<EnemyCapsule>>
+) {
+    for (mut linear_vel, mut dir, xform) in enemy.iter_mut() {
+        // Flip the movement direction when x bounds are hit.
+        if xform.translation.x < -130.0 && dir.0 < 0.0
+        {
+            dir.0 *= -1.0;
+        }
+        if xform.translation.x > 130.0 && dir.0 > 0.0
+        {
+            dir.0 *= -1.0;
+        }
+
+        let enemy_speed = 40.0;
+        let enemy_friction = 0.8;
+
+        // Apply velocity.
+        linear_vel.x += dir.0 * enemy_speed;
+        // Apply friction.
+        linear_vel.x *= enemy_friction;
     }
 }
 
@@ -369,7 +777,7 @@ fn spawn_snow(
             RigidBody::Dynamic,
             Collider::cuboid(32.0, 32.0),
             CollisionLayers::new([Layer::Snow],
-                [Layer::Player, Layer::Ground]),
+                [Layer::Player, Layer::Ground, Layer::Enemy]),
             //LockedAxes::new().lock_rotation(),
             Friction::ZERO.with_combine_rule(CoefficientCombine::Min),
             Restitution::ZERO.with_combine_rule(CoefficientCombine::Min),
@@ -388,7 +796,7 @@ fn move_snow(
     }
 }
 
-fn collide_snow(
+fn collide_snow_with_player(
     mut commands: Commands,
     keys: Res<Input<KeyCode>>,
     player: Query<Entity, With<PlayerCapsule>>,
@@ -404,6 +812,38 @@ fn collide_snow(
 
             // Add the toDelete component.
             commands.entity(entity).insert(ToDelete);
+        }
+    }
+}
+
+fn collide_snow_with_enemy(
+    mut commands: Commands,
+    enemy: Query<Entity, With<EnemyCapsule>>,
+    mut enemy_health: Query<&mut EnemyHealth>,
+    mut collisions: Query<(Entity, &CollidingEntities), (With<SnowTile>, Without<DidDamage>)>
+) {
+    for (entity, colliding_entities) in &mut collisions {
+        if colliding_entities.contains(&enemy.single())
+        {
+            let mut rng = rand::thread_rng();
+            let damage: f32 = rng.gen_range(0.01..1.5);
+            enemy_health.single_mut().0 -= damage;
+
+            // Mark the snow tile as used.
+            commands.entity(entity).insert(DidDamage);
+        }
+    }
+}
+
+fn update_health_bar(
+    mut query: Query<&mut ProgressBar>,
+    health_query: Query<&EnemyHealth>,
+    dt: Res<Time>,
+) {
+    for mut healthbar in query.iter_mut() {
+        let health = health_query.single().0;
+        if health < healthbar.value {
+            healthbar.value -= (healthbar.max_value - health) * dt.delta_seconds();
         }
     }
 }

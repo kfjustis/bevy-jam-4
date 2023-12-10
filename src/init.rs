@@ -10,7 +10,6 @@ impl Plugin for InitPlugin {
     fn build(&self, app: &mut App)
     {
         app.insert_resource(AssetMetaCheck::Never);
-
         let win_title = "Bevy Jam 4 | kftoons";
         app.add_plugins(DefaultPlugins.set(
             RenderPlugin {

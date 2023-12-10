@@ -14,6 +14,7 @@ codegen-units = 1
 [dependencies]
 #bevy = { version = "0.12.1", features = ["dynamic_linking"] } # not supported by wasm
 bevy = { version = "0.12.1" }
+bevy_health_bar = { version = "0.1.0" }
 bevy-inspector-egui = { version = "0.21" }
 bevy_scroller = { version = "0.2.1" }
 bevy_tweening = { version = "0.9" }
