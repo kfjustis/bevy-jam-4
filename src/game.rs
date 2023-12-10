@@ -82,7 +82,8 @@ impl Plugin for GamePlugin {
                 collide_snow_with_player,
                 collide_snow_with_enemy,
                 update_health_bar,
-                remove_snow
+                remove_snow,
+                remove_enemy_projectiles
             ).chain()
             .run_if(in_state(AppState::InGame))
         );
@@ -870,12 +871,15 @@ fn spawn_snow(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     time: Res<Time>,
-    mut config: ResMut<SnowConfig>
+    mut config: ResMut<SnowConfig>,
+    snow: Query<Entity, With<SnowTile>>
 ) {
     // Tick the snow timer.
     config.timer.tick(time.delta());
 
-    if config.timer.finished() {
+    const MAX_SNOW: usize = 100;
+    let snow_count = snow.iter().count();
+    if config.timer.finished() && snow_count < MAX_SNOW {
         // Pick a random snow sprite each time.
         let mut rng = rand::thread_rng();
         let sprites = vec!["snow_1.png", "snow_2.png"];
@@ -1027,6 +1031,18 @@ fn remove_snow(
     for (entity, transform) in &snow {
         if transform.translation.x < -130.0 || transform.translation.x > 250.0 ||
             transform.translation.y < -100.0 || transform.translation.y > 150.0
+        {
+            commands.entity(entity).despawn_recursive();
+        }
+    }
+}
+
+fn remove_enemy_projectiles(
+    mut commands: Commands,
+    projectiles: Query<(Entity, &Transform), With<EnemyProjectile>>
+) {
+    for (entity, transform) in &projectiles {
+        if transform.translation.y < -100.0
         {
             commands.entity(entity).despawn_recursive();
         }
