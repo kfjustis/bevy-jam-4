@@ -250,7 +250,7 @@ fn setup_main_menu(
         // Instructions text.
         parent.spawn(
             TextBundle::from_section(
-                "Launch the ice blocks into the evil sky bear! (WASD + SpaceBar)\nDon't get hit by his teddy toys!",
+                "Instructions:\nLaunch the ice blocks into the evil sky bear! (WASD + SpaceBar)\nDon't get hit by his teddy toys!",
                 TextStyle {
                     font_size: 16.0,
                     color: Color::rgb(1.0, 1.0, 1.0),
@@ -382,6 +382,28 @@ fn setup_credits(
                 button_text_style.clone()
             ));
         });
+        // Credits.
+        // Instructions text.
+        parent.spawn(
+            TextBundle::from_section(
+                "* Programmer: kftoons\n\n\
+                * Art: artsietango & kftoons\n\n\
+                * Additional Sprites:\n\t    https://megatiles.itch.io/tiny-tales-overworld-2d-tileset-asset-pack\n\n\n\
+                Created for Bevy Jam 4.\n\n\n\nThanks for playing!",
+                TextStyle {
+                    font_size: 16.0,
+                    color: Color::rgb(1.0, 1.0, 1.0),
+                    ..default()
+                }
+            )
+            .with_text_alignment(TextAlignment::Left)
+            .with_style(Style {
+                position_type: PositionType::Relative,
+                bottom: Val::Px(-45.0),
+                //right: Val::Px(497.0),
+                ..default()
+            })
+        );
     });
     // Create camera to view the menu.
     commands.spawn(Camera2dBundle::default()).insert(OnCreditsScreen);

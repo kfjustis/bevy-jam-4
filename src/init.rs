@@ -10,7 +10,7 @@ impl Plugin for InitPlugin {
     fn build(&self, app: &mut App)
     {
         app.insert_resource(AssetMetaCheck::Never);
-        let win_title = "Bevy Jam 4 | kftoons";
+        let win_title = "Lots of Snow (Bevy Jam 4) | kftoons";
         app.add_plugins(DefaultPlugins.set(
             RenderPlugin {
                 render_creation: RenderCreation::Automatic(WgpuSettings {
