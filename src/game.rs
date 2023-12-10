@@ -178,9 +178,40 @@ enum OtherButtonActions {
     Back
 }
 
+#[derive(Component)]
+struct MainMenuMusic;
+
+#[derive(Component)]
+struct InGameMusic;
+
+#[derive(Component)]
+struct WinMusic;
+
+#[derive(Component)]
+struct LoseMusic;
+
+#[derive(Component)]
+struct CreditsMusic;
+
 fn setup_main_menu(
-    mut commands: Commands
+    mut commands: Commands,
+    asset_server: Res<AssetServer>
 ) {
+    // Start music.
+    commands.spawn((
+        OnMainMenuScreen,
+        AudioBundle {
+            source: asset_server.load("CyberCafe.ogg"),
+            settings: PlaybackSettings {
+                mode: bevy::audio::PlaybackMode::Loop,
+                volume: bevy::audio::Volume::Relative(bevy::audio::VolumeLevel::new(0.05)),
+                ..default()
+            },
+            ..default()
+        },
+        MainMenuMusic,
+    ));
+
     // Define the base button styles.
     let button_style = Style {
         width: Val::Px(250.0),
@@ -330,8 +361,24 @@ fn button_credits(
 }
 
 fn setup_credits(
-    mut commands: Commands
+    mut commands: Commands,
+    asset_server: Res<AssetServer>
 ) {
+    // Start music.
+    commands.spawn((
+        OnCreditsScreen,
+        AudioBundle {
+            source: asset_server.load("Sweet_Sunday_Grove.ogg"),
+            settings: PlaybackSettings {
+                mode: bevy::audio::PlaybackMode::Loop,
+                volume: bevy::audio::Volume::Relative(bevy::audio::VolumeLevel::new(0.05)),
+                ..default()
+            },
+            ..default()
+        },
+        CreditsMusic,
+    ));
+
     // Define the base button styles.
     let button_style = Style {
         width: Val::Px(250.0),
@@ -388,8 +435,9 @@ fn setup_credits(
             TextBundle::from_section(
                 "* Programmer: kftoons\n\n\
                 * Art: artsietango & kftoons\n\n\
-                * Additional Sprites:\n\t    https://megatiles.itch.io/tiny-tales-overworld-2d-tileset-asset-pack\n\n\n\
-                Created for Bevy Jam 4.\n\n\n\nThanks for playing!",
+                * Additional Sprites:\n\t    https://megatiles.itch.io/tiny-tales-overworld-2d-tileset-asset-pack\n\n\
+                * Music:\n\t    https://slaleky.itch.io/retro-and-electronic-music-pack\n\n\n\n\
+                Created for Bevy Jam 4.\n\nThanks for playing!",
                 TextStyle {
                     font_size: 16.0,
                     color: Color::rgb(1.0, 1.0, 1.0),
@@ -607,6 +655,21 @@ fn setup_game(
     asset_server: Res<AssetServer>,
     mut texture_atlases: ResMut<Assets<TextureAtlas>>
 ) {
+    // Start music.
+    commands.spawn((
+        OnInGameScreen,
+        AudioBundle {
+            source: asset_server.load("Bit-Lord.ogg"),
+            settings: PlaybackSettings {
+                mode: bevy::audio::PlaybackMode::Loop,
+                volume: bevy::audio::Volume::Relative(bevy::audio::VolumeLevel::new(0.05)),
+                ..default()
+            },
+            ..default()
+        },
+        InGameMusic,
+    ));
+
     // Health bar text with drop shadow.
     commands.spawn((
         OnInGameScreen,
@@ -1260,8 +1323,24 @@ fn despawn_screen<T: Component>(
 }
 
 fn setup_win_screen(
-    mut commands: Commands
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
 ) {
+    // Start music.
+    commands.spawn((
+        OnWinGameScreen,
+        AudioBundle {
+            source: asset_server.load("Sweet_Sunday_Grove.ogg"),
+            settings: PlaybackSettings {
+                mode: bevy::audio::PlaybackMode::Loop,
+                volume: bevy::audio::Volume::Relative(bevy::audio::VolumeLevel::new(0.05)),
+                ..default()
+            },
+            ..default()
+        },
+        WinMusic,
+    ));
+
     // Define the base button styles.
     let button_style = Style {
         width: Val::Px(250.0),
