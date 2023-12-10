@@ -193,6 +193,16 @@ struct LoseMusic;
 #[derive(Component)]
 struct CreditsMusic;
 
+#[derive(Component)]
+struct PlayerWasHitSound;
+
+#[derive(Component)]
+struct EnemyWasHitSound;
+
+#[derive(Component)]
+struct IceWasHitSound;
+
+
 fn setup_main_menu(
     mut commands: Commands,
     asset_server: Res<AssetServer>
@@ -433,11 +443,10 @@ fn setup_credits(
         // Instructions text.
         parent.spawn(
             TextBundle::from_section(
-                "* Programmer: kftoons\n\n\
-                * Art: artsietango & kftoons\n\n\
-                * Additional Sprites:\n\t    https://megatiles.itch.io/tiny-tales-overworld-2d-tileset-asset-pack\n\n\
-                * Music:\n\t    https://slaleky.itch.io/retro-and-electronic-music-pack\n\n\n\n\
-                Created for Bevy Jam 4.\n\nThanks for playing!",
+                "* Programming:\n    kftoons\n\n\
+                * Art:\n    artsietango & kftoons\n    https://megatiles.itch.io/tiny-tales-overworld-2d-tileset-asset-pack\n\n\
+                * Music & Sounds:\n    https://slaleky.itch.io/retro-and-electronic-music-pack\n    https://jfxr.frozenfractal.com\n    https://pixabay.com/\n\n\
+                Created for Bevy Jam 4. (https://itch.io/jam/bevy-jam-4)\nAll content was vetted to accomodate licensing and accreditation.\n\nThanks for playing!",
                 TextStyle {
                     font_size: 16.0,
                     color: Color::rgb(1.0, 1.0, 1.0),
@@ -669,6 +678,35 @@ fn setup_game(
         },
         InGameMusic,
     ));
+
+    /*
+    commands.spawn((
+        OnInGameScreen,
+        AudioBundle {
+            source: asset_server.load("player_hit.wav"),
+            settings: PlaybackSettings {
+                mode: bevy::audio::PlaybackMode::Despawn,
+                volume: bevy::audio::Volume::Relative(bevy::audio::VolumeLevel::new(0.05)),
+                ..default()
+            },
+            ..default()
+        },
+        PlayerWasHitSound,
+    ));
+    commands.spawn((
+        OnInGameScreen,
+        AudioBundle {
+            source: asset_server.load("enemy_hit.wav"),
+            settings: PlaybackSettings {
+                mode: bevy::audio::PlaybackMode::Despawn,
+                volume: bevy::audio::Volume::Relative(bevy::audio::VolumeLevel::new(0.05)),
+                ..default()
+            },
+            ..default()
+        },
+        EnemyWasHitSound,
+    ));
+    */
 
     // Health bar text with drop shadow.
     commands.spawn((
@@ -1189,6 +1227,7 @@ fn move_enemy_projectiles(
 
 fn collide_snow_with_player(
     mut commands: Commands,
+    asset_server: Res<AssetServer>,
     keys: Res<Input<KeyCode>>,
     player: Query<Entity, With<PlayerCapsule>>,
     mut collisions: Query<(Entity, &mut LinearVelocity, &CollidingEntities), With<SnowTile>>
@@ -1209,12 +1248,31 @@ fn collide_snow_with_player(
 
             // Add the toDelete component.
             commands.entity(entity).insert(ToDelete);
+
+            // Play ice hit sound with random speed.
+            let mut rng = rand::thread_rng();
+            let audio_speed: f32 = rng.gen_range(0.8..1.2);
+            commands.spawn((
+                OnInGameScreen,
+                AudioBundle {
+                    source: asset_server.load("ice-hit-mix.ogg"),
+                    settings: PlaybackSettings {
+                        mode: bevy::audio::PlaybackMode::Despawn,
+                        volume: bevy::audio::Volume::Relative(bevy::audio::VolumeLevel::new(0.03)),
+                        speed: audio_speed,
+                        ..default()
+                    },
+                    ..default()
+                },
+                IceWasHitSound,
+            ));
         }
     }
 }
 
 fn collide_snow_with_enemy(
     mut commands: Commands,
+    asset_server: Res<AssetServer>,
     enemy: Query<Entity, With<EnemyCapsule>>,
     mut enemy_health: Query<&mut EnemyHealth>,
     mut collisions: Query<(Entity, &CollidingEntities), (With<SnowTile>, Without<DidDamage>)>
@@ -1229,12 +1287,29 @@ fn collide_snow_with_enemy(
 
             // Mark the snow tile as used.
             commands.entity(entity).insert(DidDamage);
+
+            // Play enemy hit sound.
+            commands.spawn((
+                OnInGameScreen,
+                AudioBundle {
+                    source: asset_server.load("enemy_hit.ogg"),
+                    settings: PlaybackSettings {
+                        mode: bevy::audio::PlaybackMode::Despawn,
+                        speed: 0.25,
+                        volume: bevy::audio::Volume::Relative(bevy::audio::VolumeLevel::new(0.2)),
+                        ..default()
+                    },
+                    ..default()
+                },
+                EnemyWasHitSound,
+            ));
         }
     }
 }
 
 fn collide_projectile_with_player(
     mut commands: Commands,
+    asset_server: Res<AssetServer>,
     player: Query<Entity, With<PlayerCapsule>>,
     mut player_health: Query<&mut PlayerHealth>,
     mut collisions: Query<(Entity, &CollidingEntities), (With<EnemyProjectile>, Without<DidDamage>)>
@@ -1250,6 +1325,21 @@ fn collide_projectile_with_player(
 
             // Mark the projectile as used.
             commands.entity(entity).insert(DidDamage);
+
+            // Play player hit sound.
+            commands.spawn((
+                OnInGameScreen,
+                AudioBundle {
+                    source: asset_server.load("player_hit.ogg"),
+                    settings: PlaybackSettings {
+                        mode: bevy::audio::PlaybackMode::Despawn,
+                        volume: bevy::audio::Volume::Relative(bevy::audio::VolumeLevel::new(0.05)),
+                        ..default()
+                    },
+                    ..default()
+                },
+                PlayerWasHitSound,
+            ));
         }
     }
 }
