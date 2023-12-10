@@ -18,11 +18,12 @@ impl Plugin for GamePlugin {
         // Plugins.
         app.add_plugins((
             PhysicsPlugins::default(),
-            PhysicsDebugPlugin::default(),
             ProgressBarPlugin,
             ScrollerPlugin,
             TweeningPlugin,
-            WorldInspectorPlugin::new()
+            // Debugging...
+            //PhysicsDebugPlugin::default(),
+            //WorldInspectorPlugin::new()
         ));
 
         // App state.
