@@ -123,9 +123,9 @@ impl Plugin for GamePlugin {
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, States)]
 enum AppState {
+    #[default]
     MainMenu,
     Credits,
-    #[default]
     InGame,
     Win,
     Lose
@@ -240,6 +240,24 @@ fn setup_main_menu(
                 button_text_style.clone()
             ));
         });
+        // Instructions text.
+        parent.spawn(
+            TextBundle::from_section(
+                "Launch the ice blocks into the evil sky bear! (WASD + SpaceBar)\nDon't get hit by his teddy toys!",
+                TextStyle {
+                    font_size: 16.0,
+                    color: Color::rgb(1.0, 1.0, 1.0),
+                    ..default()
+                }
+            )
+            .with_text_alignment(TextAlignment::Center)
+            .with_style(Style {
+                position_type: PositionType::Relative,
+                bottom: Val::Px(-45.0),
+                //right: Val::Px(497.0),
+                ..default()
+            })
+        );
     });
     // Create camera to view the menu.
     commands.spawn(Camera2dBundle::default()).insert(OnMainMenuScreen);
@@ -462,6 +480,7 @@ fn spawn_health_bar(
                     ..default()
                 },
                 transform: Transform::from_xyz(-125.0, -110.0, 400.0),
+                visibility: Visibility::Hidden,
                 ..default()
             },
             ..default()
@@ -485,6 +504,7 @@ fn spawn_health_bar(
                     ..default()
                 },
                 transform: Transform::from_xyz(-125.0, -110.0, 500.0),
+                visibility: Visibility::Hidden,
                 ..default()
             },
             ..default()
