@@ -67,8 +67,12 @@ impl Plugin for GamePlugin {
         );
 
         // InGame state systems.
-        app.add_systems(OnEnter(AppState::InGame),
-            (setup_game, setup_snow_and_projectiles, reset_health_bar).chain()
+        app.add_systems(OnEnter(AppState::InGame),(
+                setup_game,
+                setup_snow_and_projectiles,
+                reset_player_health_bar,
+                reset_enemy_health_bar
+            ).chain()
         );
         app.add_systems(Update, (
                 anim_snow_fx,
@@ -82,14 +86,17 @@ impl Plugin for GamePlugin {
                 move_enemy_projectiles,
                 collide_snow_with_player,
                 collide_snow_with_enemy,
-                update_health_bar,
+                collide_projectile_with_player,
+                update_enemy_health_bar,
+                update_player_health_bar,
                 remove_snow,
                 remove_enemy_projectiles
             ).chain()
             .run_if(in_state(AppState::InGame))
         );
         app.add_systems(OnExit(AppState::InGame), (
-                hide_health_bar,
+                hide_player_health_bar,
+                hide_enemy_health_bar,
                 despawn_screen::<OnInGameScreen>
             )
         );
@@ -391,6 +398,10 @@ struct PlayerCapsule;
 #[derive(Component)]
 struct PlayerSprite;
 
+#[derive(Component, Reflect, InspectorOptions)]
+#[reflect(InspectorOptions)]
+struct PlayerHealth (f32);
+
 #[derive(Component)]
 struct EnemyCapsule;
 
@@ -453,11 +464,20 @@ struct AnimationIndices {
 
 #[derive(Component)]
 struct Healthbar;
+
 #[derive(Component)]
 struct Shadowbar;
 
+#[derive(Component)]
+struct PlayerHealthbar;
+
+#[derive(Component)]
+struct PlayerShadowbar;
+
 #[derive(Component, Deref, DerefMut)]
 struct AnimationTimer(Timer);
+
+static RH_OFFSET:f32 = 16.0;
 
 fn spawn_health_bar(
     mut commands: Commands,
@@ -479,7 +499,7 @@ fn spawn_health_bar(
                     color: Color::rgb(0.1, 0.1, 0.1),
                     ..default()
                 },
-                transform: Transform::from_xyz(-125.0, -110.0, 400.0),
+                transform: Transform::from_xyz(-120.0 + RH_OFFSET, -110.0, 400.0),
                 visibility: Visibility::Hidden,
                 ..default()
             },
@@ -503,7 +523,55 @@ fn spawn_health_bar(
                     anchor: bevy::sprite::Anchor::CenterLeft,
                     ..default()
                 },
-                transform: Transform::from_xyz(-125.0, -110.0, 500.0),
+                transform: Transform::from_xyz(-120.0 + RH_OFFSET, -110.0, 500.0),
+                visibility: Visibility::Hidden,
+                ..default()
+            },
+            ..default()
+        }
+    ));
+
+    commands.spawn((
+        Name::new("PlayerHealthBarShadow"),
+        PlayerShadowbar,
+        ProgressBarBundle {
+            progresss_bar: ProgressBar {
+                value: 100.0,
+                max_value: 100.0,
+                ..default()
+            },
+            sprite_bundle: SpriteBundle {
+                texture: asset_server.load("player_healthbar-export.png"),
+                sprite: Sprite {
+                    anchor: bevy::sprite::Anchor::CenterLeft,
+                    color: Color::rgb(0.1, 0.1, 0.1),
+                    ..default()
+                },
+                transform: Transform::from_xyz(-119.0 + RH_OFFSET, -99.0, 400.0),
+                visibility: Visibility::Hidden,
+                ..default()
+            },
+            ..default()
+        }
+    ));
+
+    // Spawn the health bar.
+    commands.spawn((
+        Name::new("PlayerHealthBar"),
+        PlayerHealthbar,
+        ProgressBarBundle {
+            progresss_bar: ProgressBar {
+                value: 100.0,
+                max_value: 100.0,
+                ..default()
+            },
+            sprite_bundle: SpriteBundle {
+                texture: asset_server.load("player_healthbar-export.png"),
+                sprite: Sprite {
+                    anchor: bevy::sprite::Anchor::CenterLeft,
+                    ..default()
+                },
+                transform: Transform::from_xyz(-119.0 + RH_OFFSET, -99.0, 500.0),
                 visibility: Visibility::Hidden,
                 ..default()
             },
@@ -520,7 +588,47 @@ fn setup_game(
     // Health bar text with drop shadow.
     commands.spawn((
         OnInGameScreen,
-        Name::new("EnemyHpText"),
+        Name::new("PlayerHPTextShadow"),
+        TextBundle::from_section(
+            "Player HP",
+            TextStyle {
+                font_size: 16.0,
+                color: Color::rgb(0.0, 0.0, 0.0),
+                ..default()
+            }
+        )
+        .with_text_alignment(TextAlignment::Center)
+        .with_style(Style {
+            position_type: PositionType::Absolute,
+            bottom: Val::Px(35.0),
+            right: Val::Px(561.0 - RH_OFFSET),
+            ..default()
+        })
+    ));
+    commands.spawn((
+        OnInGameScreen,
+        Name::new("PlayerHPText"),
+        TextBundle::from_section(
+            "Player HP",
+            TextStyle {
+                font_size: 16.0,
+                color: Color::rgb(0.0, 0.28, 1.0),
+                ..default()
+            }
+        )
+        .with_text_alignment(TextAlignment::Center)
+        .with_style(Style {
+            position_type: PositionType::Absolute,
+            bottom: Val::Px(36.0),
+            right: Val::Px(562.0 - RH_OFFSET),
+            ..default()
+        })
+    ));
+
+    // Health bar text with drop shadow.
+    commands.spawn((
+        OnInGameScreen,
+        Name::new("EnemyHpTextShadow"),
         TextBundle::from_section(
             "Enemy HP",
             TextStyle {
@@ -532,8 +640,8 @@ fn setup_game(
         .with_text_alignment(TextAlignment::Center)
         .with_style(Style {
             position_type: PositionType::Absolute,
-            bottom: Val::Px(6.0),
-            right: Val::Px(496.0),
+            bottom: Val::Px(11.0),
+            right: Val::Px(561.0 - RH_OFFSET),
             ..default()
         })
     ));
@@ -544,15 +652,15 @@ fn setup_game(
             "Enemy HP",
             TextStyle {
                 font_size: 16.0,
-                color: Color::rgb(1.0, 1.0, 1.0),
+                color: Color::rgb(0.0, 0.28, 1.0),
                 ..default()
             }
         )
         .with_text_alignment(TextAlignment::Center)
         .with_style(Style {
             position_type: PositionType::Absolute,
-            bottom: Val::Px(7.0),
-            right: Val::Px(497.0),
+            bottom: Val::Px(12.0),
+            right: Val::Px(562.0 - RH_OFFSET),
             ..default()
         })
     ));
@@ -637,6 +745,7 @@ fn setup_game(
     commands.spawn((
         OnInGameScreen,
         Name::new("PlayerEntity"),
+        PlayerHealth(100.0),
         PlayerCapsule,
         SpatialBundle {
             visibility: Visibility::Inherited,
@@ -882,13 +991,13 @@ fn setup_snow_and_projectiles(
     commands.insert_resource(
         SnowConfig {
             // Create the repeating timer.
-            timer: Timer::new(std::time::Duration::from_millis(500), TimerMode::Repeating)
+            timer: Timer::new(std::time::Duration::from_millis(350), TimerMode::Repeating)
         }
     );
     commands.insert_resource(
         ProjectileConfig {
             // Create the repeating timer.
-            timer: Timer::new(std::time::Duration::from_millis(1200), TimerMode::Repeating)
+            timer: Timer::new(std::time::Duration::from_millis(250), TimerMode::Repeating)
         }
     );
 }
@@ -1029,7 +1138,7 @@ fn collide_snow_with_enemy(
         if colliding_entities.contains(&enemy.single())
         {
             let mut rng = rand::thread_rng();
-            let damage: f32 = rng.gen_range(0.01..5.0);
+            let damage: f32 = rng.gen_range(1.0..5.0);
             // Debugging... let damage: f32 = rng.gen_range(10.0..20.0);
             enemy_health.single_mut().0 -= damage;
 
@@ -1039,7 +1148,28 @@ fn collide_snow_with_enemy(
     }
 }
 
-fn update_health_bar(
+fn collide_projectile_with_player(
+    mut commands: Commands,
+    player: Query<Entity, With<PlayerCapsule>>,
+    mut player_health: Query<&mut PlayerHealth>,
+    mut collisions: Query<(Entity, &CollidingEntities), (With<EnemyProjectile>, Without<DidDamage>)>
+) {
+    for (entity, colliding_entities) in &mut collisions {
+        if colliding_entities.contains(&player.single())
+        {
+            let max_hp = 100.0;
+            let mut rng = rand::thread_rng();
+            let dmg_factor: f32 = rng.gen_range(0.05..0.15);
+            let damage: f32 = max_hp * dmg_factor;
+            player_health.single_mut().0 -= damage;
+
+            // Mark the projectile as used.
+            commands.entity(entity).insert(DidDamage);
+        }
+    }
+}
+
+fn update_enemy_health_bar(
     mut query: Query<&mut ProgressBar, With<Healthbar>>,
     health_query: Query<&EnemyHealth>,
     dt: Res<Time>,
@@ -1052,6 +1182,23 @@ fn update_health_bar(
         }
         if healthbar.value <= 0.0 {
             app_state.set(AppState::Win);
+        }
+    }
+}
+
+fn update_player_health_bar(
+    mut query: Query<&mut ProgressBar, With<PlayerHealthbar>>,
+    health_query: Query<&PlayerHealth>,
+    dt: Res<Time>,
+    mut app_state: ResMut<NextState<AppState>>
+) {
+    for mut healthbar in query.iter_mut() {
+        let health = health_query.single().0;
+        if health < healthbar.value {
+            healthbar.value -= (healthbar.max_value - health) * dt.delta_seconds();
+        }
+        if healthbar.value <= 0.0 {
+            app_state.set(AppState::Lose);
         }
     }
 }
@@ -1139,7 +1286,7 @@ fn setup_win_screen(
         ))
         .with_children(|parent| {
             parent.spawn(TextBundle::from_section(
-                "Return to Main Menu",
+                "Main Menu",
                 button_text_style.clone()
             ));
         });
@@ -1197,7 +1344,7 @@ fn setup_lose_screen(
         ))
         .with_children(|parent| {
             parent.spawn(TextBundle::from_section(
-                "Return to Main Menu",
+                "Main Menu",
                 button_text_style.clone()
             ));
         });
@@ -1206,7 +1353,22 @@ fn setup_lose_screen(
     commands.spawn(Camera2dBundle::default()).insert(OnLoseGameScreen);
 }
 
-fn reset_health_bar(
+fn reset_player_health_bar(
+    mut hbar_query: Query<(&mut Visibility, &mut ProgressBar), (With<PlayerHealthbar>, Without<PlayerShadowbar>)>,
+    mut sbar_query: Query<(&mut Visibility, &mut ProgressBar), (With<PlayerShadowbar>, Without<PlayerHealthbar>)>
+) {
+    for (mut v, mut hbar) in &mut hbar_query {
+        *v = Visibility::Visible;
+        hbar.value = 100.0;
+    }
+
+    for (mut v, mut sbar) in &mut sbar_query {
+        *v = Visibility::Visible;
+        sbar.value = 100.0;
+    }
+}
+
+fn reset_enemy_health_bar(
     mut hbar_query: Query<(&mut Visibility, &mut ProgressBar), (With<Healthbar>, Without<Shadowbar>)>,
     mut sbar_query: Query<(&mut Visibility, &mut ProgressBar), (With<Shadowbar>, Without<Healthbar>)>
 ) {
@@ -1221,7 +1383,19 @@ fn reset_health_bar(
     }
 }
 
-fn hide_health_bar(
+fn hide_player_health_bar(
+    mut hbar: Query<&mut Visibility, (With<PlayerHealthbar>, Without<PlayerShadowbar>)>,
+    mut sbar: Query<&mut Visibility, (With<PlayerShadowbar>, Without<PlayerHealthbar>)>,
+) {
+    for mut b in &mut hbar {
+        *b = Visibility::Hidden;
+    }
+    for mut b in &mut sbar {
+        *b = Visibility::Hidden;
+    }
+}
+
+fn hide_enemy_health_bar(
     mut hbar: Query<&mut Visibility, (With<Healthbar>, Without<Shadowbar>)>,
     mut sbar: Query<&mut Visibility, (With<Shadowbar>, Without<Healthbar>)>,
 ) {
